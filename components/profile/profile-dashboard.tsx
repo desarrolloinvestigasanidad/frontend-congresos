@@ -70,7 +70,6 @@ export default function ProfileDashboard({ profile }: ProfileDashboardProps) {
           <div className='flex flex-col md:flex-row gap-6'>
             <div className='flex flex-col items-center md:items-start'>
               <Avatar className='w-24 h-24 mb-4'>
-                <AvatarImage src='/placeholder.svg' alt={fullName} />
                 <AvatarFallback className='text-xl bg-primary text-primary-foreground'>
                   {initials}
                 </AvatarFallback>
