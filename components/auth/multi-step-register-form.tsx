@@ -417,6 +417,7 @@ function StepIndicator({
     </div>
   );
 }
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001/api";
 
 export default function MultiStepRegisterForm() {
   const router = useRouter();
@@ -573,9 +574,36 @@ export default function MultiStepRegisterForm() {
       return;
     }
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const res = await fetch(`${API_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: formData.id,
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          phone: formData.phone,
+          professionalCategory: formData.professionalCategory,
+          gender: formData.gender,
+          address: formData.address,
+          interests: formData.interests,
+          country: formData.country,
+          autonomousCommunity: formData.autonomousCommunity,
+          termsAccepted,
+          infoAccepted,
+          deviceIp: "0.0.0.0",
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Error en el registro");
+      }
+
+      // guarda el token para posteriores llamadas
+      localStorage.setItem("token", data.token);
 
       toast({
         title: "Registro exitoso",
