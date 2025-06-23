@@ -8,12 +8,30 @@ import React, {
   ReactNode,
 } from "react";
 
-interface User {
+// AuthContext.tsx
+export interface User {
   id: string;
   email: string;
-  firstName?: string;
-  lastName?: string;
-  roleId?: number;
+  password: string;
+  firstName: string;
+  lastName: string;
+  gender: "M" | "F" | string;
+  phone: string;
+  address: string;
+  country: string;
+  autonomousCommunity: string;
+  province: string | null;
+  professionalCategory: string;
+  interests: string;
+  verified: number;
+  lastAccessIp: string | null;
+  termsAccepted: number;
+  infoAccepted: number;
+  deviceIp: string;
+  state: string;
+  roleId: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface AuthContextType {
@@ -65,7 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setToken(newToken);
     setLoading(true);
     // Fetch user profile
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/profile`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/profile`, {
       headers: { Authorization: `Bearer ${newToken}` },
     })
       .then((res) => res.json())
