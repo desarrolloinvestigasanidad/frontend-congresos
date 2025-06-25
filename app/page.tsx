@@ -1,69 +1,72 @@
+// frontend-congresos/app/page.tsx
 import type { Metadata } from "next";
-import Image from "next/image";
-import BackgroundPattern from "@/components/background-pattern";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import ButtonPreview from "@/components/platform-editor/button-preview";
 
 export const metadata: Metadata = {
-  title: "Dashboard - Plataforma de Congresos Médicos",
-  description: "Panel de control para la gestión de congresos médicos",
+  title: "Plataforma de Congresos Médicos",
+  description:
+    "Panel principal con configuración dinámica desde la base de datos",
 };
 
-export default function DashboardPage() {
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface ImageButton {
+  id: number;
+  label: string;
+  href: string;
+  shape: "rectangle" | "circle" | "polygon";
+  coordinates: Point[];
+  variant: "primary" | "secondary" | "accent" | "outline";
+  active: boolean;
+  showLabel: boolean;
+  labelPosition: "center" | "top" | "bottom" | "left" | "right";
+}
+
+interface PlatformConfig {
+  heroImage: string;
+  title: string;
+  subtitle: string;
+  buttons: ImageButton[];
+}
+
+// Fallback por si falla la llamada al backend
+const defaultConfig: PlatformConfig = {
+  heroImage: "/medical-conference.png",
+  title: "Plataforma de Congresos Médicos",
+  subtitle: "Configuración no disponible todavía",
+  buttons: [],
+};
+
+async function fetchPlatformConfig(): Promise<PlatformConfig> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/platform-config`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) {
+    throw new Error("No se pudo cargar la configuración");
+  }
+  return res.json();
+}
+
+export default async function HomePage() {
+  let config: PlatformConfig;
+
+  try {
+    config = await fetchPlatformConfig();
+  } catch (e) {
+    console.warn("Error cargando config desde BD:", e);
+    config = defaultConfig;
+  }
+
   return (
-    <div className='relative min-h-screen flex flex-col items-center justify-center'>
-      <BackgroundPattern />
-
-      {/* Header con logo y botón de cerrar sesión */}
-      <header className='fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-sm border-b shadow-sm'>
-        <div className='container flex items-center justify-between h-16 px-4 md:px-6'>
-          <Link href='/' className='flex items-center gap-2'>
-            <div className='relative h-8 w-8'>
-              <Image
-                src='/images/logo-congreso.png'
-                alt='Logo Congresos Médicos'
-                fill
-                className='object-contain'
-              />
-            </div>
-            <span className='font-bold text-primary'>Congresos Médicos</span>
-          </Link>
-
-          <Link href='/login'>
-            <Button variant='outline' size='sm'>
-              Cerrar sesión
-            </Button>
-          </Link>
-        </div>
-      </header>
-
-      {/* Contenido central */}
-      <div className='container flex flex-col items-center justify-center text-center px-4 py-16 max-w-3xl'>
-        <div className='relative w-64 h-64 mb-8'>
-          <Image
-            src='/medical-conference.png'
-            alt='Congresos Médicos'
-            fill
-            className='object-contain'
-          />
-        </div>
-
-        <h1 className='text-4xl md:text-5xl font-bold text-primary mb-4'>
-          Bienvenido a la Plataforma de Congresos
-        </h1>
-
-        <p className='text-xl text-muted-foreground mb-8'>
-          Tu portal para la gestión y participación en congresos médicos de alto
-          nivel científico.
-        </p>
-
-        <div className='flex flex-wrap gap-4 justify-center'>
-          <Button size='lg' className='bg-primary hover:bg-primary/90'>
-            Explorar congresos
-          </Button>
-          <Link href='/profile'> Ver mi perfil</Link>
-        </div>
+    <main className='min-h-screen flex flex-col items-center justify-center bg-white p-8'>
+      {/* Vista previa dinámica */}
+      <div className='w-full max-w-6xl'>
+        <ButtonPreview config={config} />
       </div>
-    </div>
+    </main>
   );
 }
