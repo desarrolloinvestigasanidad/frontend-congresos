@@ -63,7 +63,7 @@ export default function LoginForm() {
       // Llama a login(token) para guardar y obtener perfil
       login(body.token);
 
-      router.push("/dashboard");
+      router.push("/");
     } catch (err: any) {
       setError(err.message || "Credenciales incorrectas. Inténtalo de nuevo.");
     } finally {
