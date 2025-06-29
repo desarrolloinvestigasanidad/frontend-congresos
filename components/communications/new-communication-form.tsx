@@ -33,6 +33,7 @@ interface Author {
 
 interface FormData {
   title: string;
+  abstract: string;
   keywords: string;
   type: "poster" | "video" | "oral" | "";
   congressId: string;
@@ -83,6 +84,7 @@ export default function NewCommunicationForm() {
 
   const [formData, setFormData] = useState<FormData>({
     title: "",
+    abstract: "",
     keywords: "",
     type: "",
     congressId: "",
@@ -153,6 +155,8 @@ export default function NewCommunicationForm() {
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = "El título es obligatorio";
+    if (!formData.abstract.trim())
+      newErrors.abstract = "El resumen es obligatorio";
     if (!formData.type)
       newErrors.type = "El tipo de comunicación es obligatorio";
     if (!formData.congressId)
@@ -279,6 +283,19 @@ export default function NewCommunicationForm() {
                   value={formData.title}
                   onChange={(e) => updateFormData("title", e.target.value)}
                 />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='abstract'>Resumen (Abstract) *</Label>
+                <Textarea
+                  id='abstract'
+                  value={formData.abstract}
+                  onChange={(e) => updateFormData("abstract", e.target.value)}
+                  rows={5}
+                  placeholder='Escribe un breve resumen de tu comunicación...'
+                />
+                {errors.abstract && (
+                  <p className='text-sm text-red-600'>{errors.abstract}</p>
+                )}
               </div>
               <div className='space-y-2'>
                 <Label htmlFor='keywords'>Palabras Clave</Label>
