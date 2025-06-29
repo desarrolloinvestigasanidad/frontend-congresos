@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,29 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import AuthorManagement from "./author-management";
-import FileUploadSection from "./file-upload-section";
-import PaymentSummary from "./payment-summary";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Send, ArrowLeft, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import AuthorManagement from "./author-management";
+import FileUploadSection from "./file-upload-section";
 
-interface FormData {
-  title: string;
-  abstract: string;
-  keywords: string;
-  type: "poster" | "video" | "oral" | "";
-  congress: string;
-  category: string;
-  authors: Author[];
-  files: {
-    abstract?: File;
-    poster?: File;
-    video?: File;
-    presentation?: File;
-  };
-}
-
+// --- Interfaces ---
 interface Author {
   id: string;
   name: string;
@@ -46,13 +31,26 @@ interface Author {
   isRegistered: boolean;
 }
 
-const availableCongreses = [
-  {
-    id: "congreso-2025",
-    name: "Congreso Nacional de Medicina 2025",
-    active: true,
-  },
-];
+interface FormData {
+  title: string;
+  keywords: string;
+  type: "poster" | "video" | "oral" | "";
+  congressId: string;
+  category: string;
+  authors: Author[];
+  introduction: string;
+  objectives: string;
+  methodology: string;
+  results: string;
+  discussion: string;
+  bibliography: string;
+}
+
+interface Congress {
+  id: string | number;
+  title: string;
+  status: string; // Asumimos que el backend devuelve un estado
+}
 
 const categories = {
   poster: [
@@ -81,45 +79,84 @@ const categories = {
 
 export default function NewCommunicationForm() {
   const router = useRouter();
+  const { user, token } = useAuth();
+
   const [formData, setFormData] = useState<FormData>({
     title: "",
-    abstract: "",
     keywords: "",
     type: "",
-    congress: "congreso-2025", // Pre-seleccionar el congreso activo
+    congressId: "",
     category: "",
-    authors: [
-      {
-        id: "1",
-        name: "Dr. Juan Pérez", // Datos del usuario actual
-        email: "juan@email.com",
-        institution: "Hospital Universitario",
-        role: "principal",
-        isRegistered: true,
-      },
-    ],
-    files: {},
+    authors: [],
+    introduction: "",
+    objectives: "",
+    methodology: "",
+    results: "",
+    discussion: "",
+    bibliography: "",
   });
 
+  const [availableCongresses, setAvailableCongresses] = useState<Congress[]>(
+    []
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+  const [files, setFiles] = useState<Record<string, File | undefined>>({});
+
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        authors: [
+          {
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            institution:
+              (user as any).institution || "Institución no especificada",
+            role: "principal",
+            isRegistered: true,
+          },
+        ],
+      }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const fetchCongresses = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/congresses`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (!response.ok)
+          throw new Error("No se pudieron cargar los congresos");
+        const data = await response.json();
+        // Filtramos para mostrar solo los congresos que están activos
+        setAvailableCongresses(data.filter((c: any) => c.status === "active"));
+      } catch {
+        setApiError("No se pudieron cargar los congresos disponibles.");
+      }
+    };
+    fetchCongresses();
+  }, [token]);
 
   const updateFormData = (field: keyof FormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: "" }));
-    }
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = "El título es obligatorio";
-    if (!formData.abstract.trim())
-      newErrors.abstract = "El resumen es obligatorio";
-    if (!formData.type) newErrors.type = "Selecciona el tipo de comunicación";
-    if (!formData.congress) newErrors.congress = "Selecciona un congreso";
-    if (!formData.category) newErrors.category = "Selecciona una categoría";
+    if (!formData.type)
+      newErrors.type = "El tipo de comunicación es obligatorio";
+    if (!formData.congressId)
+      newErrors.congressId = "El congreso es obligatorio";
     if (formData.authors.length === 0)
       newErrors.authors = "Debe haber al menos un autor";
     setErrors(newErrors);
@@ -127,32 +164,16 @@ export default function NewCommunicationForm() {
   };
 
   const handleApiSubmit = async (status: "draft" | "submitted") => {
-    if (status === "submitted" && !validateForm()) {
-      return;
-    }
-
+    if (status === "submitted" && !validateForm()) return;
     setIsSubmitting(true);
     setApiError(null);
 
-    // NOTA: La subida de ficheros real es más compleja (multipart/form-data).
-    // Por ahora, enviaremos solo los datos JSON para conectar con el backend.
-    const dataToSend = {
-      title: formData.title,
-      abstract: formData.abstract,
-      keywords: formData.keywords,
-      type: formData.type,
-      congressId: formData.congress, // Asegúrate de que el backend espera `congressId`
-      category: formData.category,
-      authors: formData.authors,
-      status: status,
-    };
+    // Creamos una copia de los datos del formulario para enviarlos
+    // El backend ya está preparado para recibir todos estos campos
+    const dataToSend = { ...formData, status };
 
     try {
-      // Asume que el token está en localStorage. ¡Ajusta si es necesario!
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("No estás autenticado. Por favor, inicia sesión.");
-      }
+      if (!token) throw new Error("No estás autenticado.");
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/comunicaciones`,
@@ -175,202 +196,210 @@ export default function NewCommunicationForm() {
 
       router.push("/plataforma/comunicaciones");
     } catch (error: any) {
-      console.error("Error al procesar la comunicación:", error);
       setApiError(error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const coauthors = formData.authors.filter(
-    (author) => author.role === "coautor"
-  );
-  const totalCost = 8;
-
   return (
     <div className='space-y-6'>
-      {/* Navegación */}
       <div className='flex items-center gap-4'>
         <Link href='/plataforma/comunicaciones'>
           <Button variant='outline' size='sm'>
             <ArrowLeft className='w-4 h-4 mr-2' /> Volver
           </Button>
         </Link>
-        <div className='flex items-center gap-2'>
-          <Badge variant='secondary'>Borrador</Badge>
-        </div>
       </div>
-      {/* Mostrar el error de la API si existe */}
+
       {apiError && (
-        <div className='p-4 my-4 bg-red-100 border border-red-400 text-red-700 rounded-md flex items-center gap-2'>
-          <AlertCircle className='w-5 h-5' />
-          <p>{apiError}</p>
+        <div className='p-4 text-red-700 bg-red-50 rounded-md border border-red-200'>
+          {apiError}
         </div>
       )}
-      {/* Información básica */}
+
+      <Tabs defaultValue='basic' className='w-full'>
+        <TabsList className='grid w-full grid-cols-2 md:grid-cols-4'>
+          <TabsTrigger value='basic'>1. Básico</TabsTrigger>
+          <TabsTrigger value='content'>2. Contenido</TabsTrigger>
+          <TabsTrigger value='authors'>3. Autores</TabsTrigger>
+          <TabsTrigger value='files'>4. Archivos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value='basic' className='pt-6'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Información Básica</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='grid gap-4 md:grid-cols-2'>
+                <div className='space-y-2'>
+                  <Label htmlFor='congressId'>Congreso *</Label>
+                  <Select
+                    value={formData.congressId}
+                    onValueChange={(value) =>
+                      updateFormData("congressId", value)
+                    }>
+                    <SelectTrigger>
+                      <SelectValue placeholder='Selecciona un congreso activo' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableCongresses.map((congress) => (
+                        <SelectItem
+                          key={congress.id}
+                          value={String(congress.id)}>
+                          {congress.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor='type'>Tipo de Comunicación *</Label>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(value) =>
+                      updateFormData("type", value as FormData["type"])
+                    }>
+                    <SelectTrigger>
+                      <SelectValue placeholder='Selecciona el tipo' />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value='poster'>Poster</SelectItem>
+                      <SelectItem value='video'>Video</SelectItem>
+                      <SelectItem value='oral'>Comunicación Oral</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='title'>Título *</Label>
+                <Input
+                  id='title'
+                  value={formData.title}
+                  onChange={(e) => updateFormData("title", e.target.value)}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='keywords'>Palabras Clave</Label>
+                <Input
+                  id='keywords'
+                  value={formData.keywords}
+                  onChange={(e) => updateFormData("keywords", e.target.value)}
+                  placeholder='Separadas por comas...'
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value='content' className='pt-6'>
+          <Card>
+            <CardHeader>
+              <CardTitle>Contenido de la Comunicación</CardTitle>
+            </CardHeader>
+            <CardContent className='space-y-4'>
+              <div className='space-y-2'>
+                <Label htmlFor='introduction'>Introducción</Label>
+                <Textarea
+                  id='introduction'
+                  value={formData.introduction}
+                  onChange={(e) =>
+                    updateFormData("introduction", e.target.value)
+                  }
+                  rows={10}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='objectives'>Objetivos</Label>
+                <Textarea
+                  id='objectives'
+                  value={formData.objectives}
+                  onChange={(e) => updateFormData("objectives", e.target.value)}
+                  rows={5}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='methodology'>Metodología</Label>
+                <Textarea
+                  id='methodology'
+                  value={formData.methodology}
+                  onChange={(e) =>
+                    updateFormData("methodology", e.target.value)
+                  }
+                  rows={10}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='results'>Resultados</Label>
+                <Textarea
+                  id='results'
+                  value={formData.results}
+                  onChange={(e) => updateFormData("results", e.target.value)}
+                  rows={10}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='discussion'>Discusión / Conclusión</Label>
+                <Textarea
+                  id='discussion'
+                  value={formData.discussion}
+                  onChange={(e) => updateFormData("discussion", e.target.value)}
+                  rows={10}
+                />
+              </div>
+              <div className='space-y-2'>
+                <Label htmlFor='bibliography'>Bibliografía</Label>
+                <Textarea
+                  id='bibliography'
+                  value={formData.bibliography}
+                  onChange={(e) =>
+                    updateFormData("bibliography", e.target.value)
+                  }
+                  rows={5}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value='authors' className='pt-6'>
+          <AuthorManagement
+            authors={formData.authors}
+            onAuthorsChange={(newAuthors) =>
+              updateFormData("authors", newAuthors)
+            }
+            error={errors.authors}
+          />
+        </TabsContent>
+
+        <TabsContent value='files' className='pt-6'>
+          <FileUploadSection
+            type={formData.type}
+            files={files}
+            onFilesChange={setFiles}
+          />
+        </TabsContent>
+      </Tabs>
+
       <Card>
-        <CardHeader>
-          <CardTitle>Información Básica</CardTitle>
-        </CardHeader>
-        <CardContent className='space-y-4'>
-          <div className='grid gap-4 md:grid-cols-2'>
-            <div className='space-y-2'>
-              <Label htmlFor='congress'>Congreso *</Label>
-              <Select
-                value={formData.congress}
-                onValueChange={(value) => updateFormData("congress", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder='Selecciona un congreso' />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCongreses.map((congress) => (
-                    <SelectItem
-                      key={congress.id}
-                      value={congress.id}
-                      disabled={!congress.active}>
-                      {congress.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.congress && (
-                <p className='text-sm text-red-600'>{errors.congress}</p>
-              )}
-            </div>
-            <div className='space-y-2'>
-              <Label htmlFor='type'>Tipo de Comunicación *</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(value) => updateFormData("type", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder='Selecciona el tipo' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='poster'>Poster</SelectItem>
-                  <SelectItem value='video'>Video</SelectItem>
-                  <SelectItem value='oral'>Comunicación Oral</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.type && (
-                <p className='text-sm text-red-600'>{errors.type}</p>
-              )}
-            </div>
-          </div>
-          {formData.type && (
-            <div className='space-y-2'>
-              <Label htmlFor='category'>Categoría *</Label>
-              <Select
-                value={formData.category}
-                onValueChange={(value) => updateFormData("category", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder='Selecciona una categoría' />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories[formData.type as keyof typeof categories]?.map(
-                    (category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
-              {errors.category && (
-                <p className='text-sm text-red-600'>{errors.category}</p>
-              )}
-            </div>
-          )}
-          <div className='space-y-2'>
-            <Label htmlFor='title'>Título *</Label>
-            <Input
-              id='title'
-              value={formData.title}
-              onChange={(e) => updateFormData("title", e.target.value)}
-              placeholder='Título de la comunicación'
-              maxLength={200}
-            />
-            <div className='flex justify-between text-sm text-muted-foreground'>
-              {errors.title && (
-                <span className='text-red-600'>{errors.title}</span>
-              )}
-              <span>{formData.title.length}/200</span>
-            </div>
-          </div>
-          <div className='space-y-2'>
-            <Label htmlFor='abstract'>Resumen *</Label>
-            <Textarea
-              id='abstract'
-              value={formData.abstract}
-              onChange={(e) => updateFormData("abstract", e.target.value)}
-              placeholder='Resumen de la comunicación (máximo 500 palabras)'
-              rows={6}
-              maxLength={3000}
-            />
-            <div className='flex justify-between text-sm text-muted-foreground'>
-              {errors.abstract && (
-                <span className='text-red-600'>{errors.abstract}</span>
-              )}
-              <span>{formData.abstract.length}/3000 caracteres</span>
-            </div>
-          </div>
-          <div className='space-y-2'>
-            <Label htmlFor='keywords'>Palabras Clave</Label>
-            <Input
-              id='keywords'
-              value={formData.keywords}
-              onChange={(e) => updateFormData("keywords", e.target.value)}
-              placeholder='Palabras clave separadas por comas'
-            />
-            <p className='text-sm text-muted-foreground'>
-              Máximo 5 palabras clave separadas por comas
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-      {/* Gestión de autores */}
-      <AuthorManagement
-        authors={formData.authors}
-        onAuthorsChange={(authors) => updateFormData("authors", authors)}
-        error={errors.authors}
-      />
-      {/* Subida de archivos */}
-      <FileUploadSection
-        type={formData.type}
-        files={formData.files}
-        onFilesChange={(files) => updateFormData("files", files)}
-        error={errors.files}
-      />
-      {/* Resumen de pago */}
-      <PaymentSummary
-        principalAuthor={formData.authors.find((a) => a.role === "principal")}
-        coauthors={coauthors}
-        totalCost={totalCost}
-      />
-      {/* Acciones */}
-      <Card>
-        <CardContent className='p-6'>
-          <div className='flex flex-col md:flex-row gap-4 justify-between'>
-            <div className='flex items-center gap-2 text-sm text-muted-foreground'>
-              <AlertCircle className='w-4 h-4' />
-              <span>Asegúrate de guardar los cambios antes de salir.</span>
-            </div>
-            <div className='flex gap-3'>
-              <Button
-                variant='outline'
-                onClick={() => handleApiSubmit("draft")}
-                disabled={isSubmitting}>
-                <Save className='w-4 h-4 mr-2' />
-                {isSubmitting ? "Guardando..." : "Guardar Borrador"}
-              </Button>
-              <Button
-                onClick={() => handleApiSubmit("submitted")}
-                disabled={isSubmitting}
-                className='bg-accent hover:bg-accent/90'>
-                <Send className='w-4 h-4 mr-2' />
-                {isSubmitting ? "Enviando..." : "Enviar Comunicación"}
-              </Button>
-            </div>
-          </div>
+        <CardContent className='p-6 flex flex-col sm:flex-row items-center justify-end gap-3'>
+          <p className='text-sm text-muted-foreground mr-auto'>
+            Revisa todos los apartados antes de enviar la comunicación.
+          </p>
+          <Button
+            variant='outline'
+            onClick={() => handleApiSubmit("draft")}
+            disabled={isSubmitting}>
+            <Save className='w-4 h-4 mr-2' />
+            Guardar Borrador
+          </Button>
+          <Button
+            onClick={() => handleApiSubmit("submitted")}
+            disabled={isSubmitting}>
+            <Send className='w-4 h-4 mr-2' />
+            Enviar para Revisión
+          </Button>
         </CardContent>
       </Card>
     </div>

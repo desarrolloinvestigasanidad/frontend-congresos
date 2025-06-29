@@ -20,7 +20,7 @@ type CommunicationType = "poster" | "video" | "oral";
 interface Author {
   id: number;
   name: string;
-  role: string;
+  role: "principal" | "coautor";
   email: string;
 }
 
@@ -28,12 +28,12 @@ interface Communication {
   id: number;
   title: string;
   type: CommunicationType;
-  status: string;
+  status: "draft" | "submitted" | "accepted" | "rejected" | "review";
   createdAt: string;
   updatedAt: string;
   authors: Author[];
   congress: string;
-  paymentStatus: string;
+  paymentStatus: "pending" | "paid" | "failed";
   files: Record<string, string | null>;
 }
 
@@ -53,7 +53,7 @@ export default function CommunicationsPage() {
 
       try {
         // Obtenemos el token desde localStorage, igual que en el formulario
-        const token = localStorage.getItem("authToken");
+        const token = localStorage.getItem("token");
         if (!token) {
           throw new Error(
             "Token de autenticación no encontrado. Por favor, inicia sesión."
